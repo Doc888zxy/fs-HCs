@@ -1,0 +1,31 @@
+##Figure 4A-C
+my.colors <- colorRampPalette(c("lightblue", "white", "darkred"))(100)
+sce_m <- sce[,sce$cell_type == 'malignant cell']
+FeaturePlot(sce_m, features = c('SLC2A2','KHK','ALDOB'), cols = my.colors,reduction = 'tsne')
+
+
+##Figure 4D
+#ReactomePA ####
+library(ReactomePA)
+eReac <- enrichPathway(gene = diff_entrez$ENTREZID,
+                       organism = 'human',
+                       pvalueCutoff = 0.05)
+eReacx <- setReadable(eReac, 'org.Hs.eg.db', 'ENTREZID')
+colnames(eReac_result)
+pdf('Reactome_dotplot.pdf',width = 10,height = 7)
+dotplot(
+  eReacx,
+  x = "RichFactor",
+  color = "p.adjust",
+  showCategory=20,
+  label_format = Inf
+  )
+dev.off()
+eReac_result <- eReac@result
+cnetplot <- cnetplot(eReacx, 
+                      circular = TRUE, 
+                      colorEdge = TRUE,
+                      categorySize="pvalue",
+                      showCategory =5,
+                      layout ='kk')
+cnetplot
