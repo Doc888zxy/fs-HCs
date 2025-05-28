@@ -2,23 +2,50 @@ Figure 2B, C
 
 library(Seurat)
 library(monocle)
-library(dplyr)
-library(tidyverse)
-library(dplyr)
-library(data.table)
-library(Matrix)
-library(Seurat)
-library(tidyverse)
-library(SeuratObject)
-library(Seurat)
-library(dplyr)
-library(ggplot2)
-library(magrittr)
-library(gtools)
-library(stringr)
-library(Matrix)
-library(tidyverse)
-library(patchwork)
-library(data.table)
-library(RColorBrewer)
-library(ggpubr)
+
+
+ct <- sce@assays$RNA$counts
+gene_ann <- data.frame(
+  gene_short_name = row.names(ct),
+  row.names = row.names(ct)
+)
+
+fd <- new("AnnotatedDataFrame", data = gene_ann)
+pd <- new("AnnotatedDataFrame", data = sce@meta.data)
+sc_cds <- newCellDataSet(
+  ct,
+  phenoData = pd,
+  featureData = fd,
+  expressionFamily = negbinomial.size(),
+  lowerDetectionLimit = 1
+)
+
+sc_cds <- estimateSizeFactors(sc_cds)
+
+sc_cds <- estimateDispersions(sc_cds)
+dd <- "diff.Rdata"
+if (!file.exists(dd)) {
+  diff_test_res <- differentialGeneTest(
+    sc_cds,
+    fullModelFormulaStr = " ~ Group"
+  )
+  save(diff_test_res, file = dd)
+}
+ordering_genes <- row.names(subset(diff_test_res, qval < 0.01))
+
+sc_cds <- setOrderingFilter(sc_cds, ordering_genes)
+
+plot_ordering_genes(sc_cds)
+sc_cds <- reduceDimension(sc_cds, residualModelFormulaStr = "~Group")
+sc_cds <- orderCells(sc_cds)
+gene_to_cluster <- c('ALDOB','KHK')
+library(parallel)
+plot_pseudotime_heatmap(
+  sc_cds[gene_to_cluster, ],
+  num_clusters = nlevels(Idents(sce)),
+  show_rownames = TRUE,
+  cores = 4,
+  return_heatmap = TRUE,
+  hmcols = colorRampPalette(c("navy", "white", "firebrick3"))(100)
+)
+
