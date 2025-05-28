@@ -1,0 +1,34 @@
+##Figure S3A-C
+mycolor = c('#D1352B','#3C77AF','#D2EBC8','#AECDE1','#7DBFA7',
+            '#EE934E','#9B5B33','#F5CFE4',
+            '#B383B9','#8FA4AE','#FCED82','#F5D2A8','#BBDD78')
+Idents(sce) <- sce$cell_type
+DimPlot(sce,
+                  reduction="tsne",#可以替换成tsne
+                  label = "F", 
+                  pt.size = 0.2,
+                  label.size = 4) +
+  theme(axis.line = element_line(size=0.1, colour = "black"), 
+        axis.ticks = element_blank()
+  ) 
+
+##Figure S3E
+plot_cell_trajectory(sc_cds, color_by = 'cell_type') + scale_color_npg()
+
+##Figure S3F
+gs = c('SLC2A2')
+plot_cell_trajectory(sc_cds,markers=gs,
+                     use_color_gradient=T)
+
+##Figure S3H-I
+library(Seurat)
+library(hdf5r)
+library(ggplot2)
+library(patchwork)
+library(data.table)
+library(dplyr)
+library(viridis)
+library(patchwork)
+library(RColorBrewer)
+SpatialDimPlot(ST, stroke=NA) 
+
