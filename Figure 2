@@ -165,3 +165,10 @@ p <- ggplot(gene_data_long, aes(x = distance_to_hepatocyte, y = Expression, colo
     plot.title = element_text(hjust = 0.5, face = "bold") 
   ) +
   coord_cartesian(ylim = ylim_values) 
+
+##Figure 2O-P
+my.colors <- colorRampPalette(c("lightblue", "white", "darkred"))(100)
+sce_m <- sce[,sce$cell_type == 'malignant cell']
+p <- FeaturePlot(sce_m, reduction = 'tsne',
+                 features = c('SLC2A2','KHK','ALDOB'),
+                 ncol = 2)
