@@ -84,3 +84,55 @@ p <- ggplot(gene_data_long, aes(x = pseudotime, y = Expression, color = Gene)) +
   ) +
   coord_cartesian(ylim = ylim_values) 
 
+#Figure 2E
+coords <- ST@images$image@coordinates
+spatial_corr <- as.data.frame(coords)
+rownames(spatial_corr) <- colnames(ST@assays$Spatial$counts)
+spatial_corr <- spatial_corr[,c(2,3)]
+colnames(spatial_corr) <- c('s_1', 's_2')
+spatial_corr <- as.matrix(spatial_corr)
+ST[["spatial_new"]] <- CreateDimReducObject(embeddings=spatial_corr, key = "s_", assay = "Spatial")
+mycolor = c( '#53A85F', '#F1BB72', '#F3B1A0',
+             '#E95C59',  '#8C549C', '#712820','#68A180','#E59CC4','#C5DEBA', '#E4C755', '#58A4C3',
+             '#AA9A59', '#E63863', '#E39A35', '#C1E6F3', '#6778AE', '#91D0BE', '#B53E2B',
+             '#DCC1DD', '#CCE0F5',  '#CCC9E6', '#625D9E', '#68A180', '#3A6963',
+             '#968175','#E5D2DD','#D6E7A3', '#57C3F3',  '#AB3282','#23452F', '#585658',
+             '#9FA3A8', '#E0D4CA', '#5F3D69','#BD956A', '#F7F398')
+DimPlot(ST, reduction='spatial_new',cols = mycolor, group.by = 'TYPE') + 
+  guides(color=guide_legend(override.aes = list(size=6), ncol=2)) + 
+  theme_void() 
+
+#Figure 2F-I
+FeaturePlot(ST, features = c('ALDOB','KHK','SLC2A2' ,'SLC2A5'), reduction='spatial_new') +
+  scale_colour_viridis(option="D") + theme_void()
+
+#Figure 2J
+spatial_coords <- spatial_corr  
+rownames(spatial_coords) <- rownames(spatial_corr) 
+
+hepatocyte_spots <- WhichCells(ST, idents = "Hepatocyte")
+hepatocyte_coords <- spatial_coords[hepatocyte_spots, ]
+calc_min_distance <- function(spot_coords, target_coords) {
+  apply(target_coords, 1, function(target) {
+    sqrt(sum((spot_coords - target)^2))
+  })
+}
+
+min_distances <- apply(spatial_coords, 1, function(spot) {
+  min(calc_min_distance(spot, hepatocyte_coords))
+})
+
+ST[["distance_to_hepatocyte"]] <- min_distances
+
+ST@meta.data$distance_to_hepatocyte <- min_distances 
+ST_HCC <- ST[,Idents(ST) == 'HCC']
+
+HCC_spots <- WhichCells(ST, idents = "HCC")
+
+ST$color_group <- ifelse(Cells(ST) %in% HCC_spots, ST$distance_to_hepatocyte, NA)
+
+FeaturePlot(ST, features = "color_group", reduction = "spatial_new") +
+  scale_colour_viridis(option = "D", na.value = "grey") + 
+  theme_void() +
+  ggtitle("Distance to Hepatocyte (HCC spots colored)") +
+  theme(plot.title = element_text(hjust = 0.5))
