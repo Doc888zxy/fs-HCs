@@ -1,9 +1,68 @@
-#Figure 2B, C
+#Figure 2A, B
+load('./HCC_ST.Rdata')
+coords <- ST@images$image@coordinates
+spatial_corr <- as.data.frame(coords)
+rownames(spatial_corr) <- colnames(ST@assays$Spatial$counts)
+spatial_corr <- spatial_corr[,c(2,3)]
+colnames(spatial_corr) <- c('s_1', 's_2')
+spatial_corr <- as.matrix(spatial_corr)
+head(spatial_corr)
+ST[["spatial_new"]] <- CreateDimReducObject(embeddings=spatial_corr, key = "s_", assay = "Spatial")
+p1 = FeaturePlot(ST, features = c('ALDOB','KHK'), reduction='spatial_new') +
+  scale_colour_viridis(option="D") + theme_void()
+p1
+
+#Figure 2C
+spatial_coords <- spatial_corr  
+rownames(spatial_coords) <- rownames(spatial_corr)  
+
+Idents(ST) <- ST$cell_type_HCC
+table(ST$cell_type_HCC)
+hepatocyte_spots <- WhichCells(ST, idents = "Hepatocyte")
+hepatocyte_coords <- spatial_coords[hepatocyte_spots, ]
+
+calc_min_distance <- function(spot_coords, target_coords) {
+  apply(target_coords, 1, function(target) {
+    sqrt(sum((spot_coords - target)^2))
+  })
+}
+
+min_distances <- apply(spatial_coords, 1, function(spot) {
+  min(calc_min_distance(spot, hepatocyte_coords))
+})
+
+ST[["distance_to_hepatocyte"]] <- min_distances
+
+genes_of_interest <- c("SLC2A2", "KHK", "ALDOB",'ALB','GPC3')
+gene_data <- FetchData(ST_HCC, vars = c(genes_of_interest, "distance_to_hepatocyte"))
+gene_data[genes_of_interest] <- scale(gene_data[genes_of_interest])
+gene_data_long <- reshape2::melt(gene_data, id.vars = "distance_to_hepatocyte", 
+                                 variable.name = "Gene", value.name = "Expression")
+
+p <- ggplot(gene_data_long, aes(x = distance_to_hepatocyte, y = Expression, color = Gene)) +
+  geom_smooth(method = "loess", se = FALSE, size = 0.75) + 
+  scale_color_manual(values = c("#E41A1C", "#58A4C3", "#625D9E", '#DCC1DD','black')) +  
+  labs(
+    x = "Relative Distance to Hepatocyte Spots",
+    y = "Relative Gene Expression",
+    color = "Gene"
+  )  +
+  theme_minimal(base_size = 14) + 
+  theme(
+    panel.grid = element_blank(),
+    panel.background = element_blank(),
+    axis.line = element_line(color = "black"), 
+    legend.position = "right",
+    plot.title = element_text(hjust = 0.5, face = "bold") 
+  ) +
+  coord_cartesian(ylim = ylim_values) 
+
+
+#Figure 2D, E
 
 library(Seurat)
 library(monocle)
-
-
+sce <- load('./sce_hcc_xiangya.Rdata')
 ct <- sce@assays$RNA$counts
 gene_ann <- data.frame(
   gene_short_name = row.names(ct),
@@ -36,7 +95,7 @@ ordering_genes <- row.names(subset(diff_test_res, qval < 0.01))
 sc_cds <- setOrderingFilter(sc_cds, ordering_genes)
 
 plot_ordering_genes(sc_cds)
-sc_cds <- reduceDimension(sc_cds, residualModelFormulaStr = "~Group")
+sc_cds <- reduceDimension(sc_cds, residualModelFormulaStr = "~origen.ident")
 sc_cds <- orderCells(sc_cds)
 gene_to_cluster <- c('ALDOB','KHK')
 library(parallel)
@@ -48,8 +107,98 @@ plot_pseudotime_heatmap(
   return_heatmap = TRUE,
   hmcols = colorRampPalette(c("navy", "white", "firebrick3"))(100)
 )
+#Figure 2F
+genes_of_interest <- c("KHK", "ALDOB")
+pseudotime <- sc_cds$Pseudotime
+gene_data <- sc_cds@assayData$exprs[genes_of_interest,] 
+gene_data <- as.data.frame(t(gene_data))
+gene_data$pseudotime <- pseudotime
 
-#Figure 2D 
+gene_data[,genes_of_interest] <- scale(gene_data[,genes_of_interest])
+gene_data_long <- reshape2::melt(gene_data, id.vars = "pseudotime", 
+                                 variable.name = "Gene", value.name = "Expression")
+
+p <- ggplot(gene_data_long, aes(x = pseudotime, y = Expression, color = Gene)) +
+  geom_smooth(method = "loess", se = FALSE, size = 1.2,span = 1) + 
+  scale_color_manual(values = c("#C5DEBA", "#57C3F3", "#E41A1C", '#DCC1DD','black')) +  
+  labs(
+    x = "Pseudotime",
+    y = "Relative Gene Expression",
+    color = "Gene"
+  ) +
+  theme_minimal(base_size = 14) +  
+  theme(
+    panel.grid = element_blank(),
+    panel.background = element_blank(),
+    axis.line = element_line(color = "black"), 
+    legend.position = "right",
+    plot.title = element_text(hjust = 0.5, face = "bold") 
+  ) +
+  coord_cartesian(ylim = ylim_values) 
+
+print(p)
+
+#Figure 2G
+sce <- load('./HRA_HCCsc.Rdata')
+sce$fs_HCs <- ifelse(((sce@assays$RNA$counts['SLC2A2',]>0)&(sce@assays$RNA$counts['KHK',]>0)
+                      &(sce@assays$RNA$counts['ALDOB',]=0)),'fs-HCs','non fs-HCs')
+Idents(sce) <- sce$fs_HCs
+sc = DimPlot(sce,cols = mycolor,
+                  reduction="tsne",
+                  label = "F", 
+                  pt.size = 0.2,
+                  label.size = 4) +
+  theme(axis.line = element_line(size=0.1, colour = "black"), 
+        axis.ticks = element_blank()
+  ) 
+
+sc
+
+#Figure 2J
+
+nbins <- 20                      
+df <- data.frame(
+  cell_id  = colnames(sce),
+  subgroup = sce$fs_HCs,
+       
+) 
+
+df_bin <- df |>
+  group_by(expr_bin, subgroup) |>
+  summarise(n = n(), .groups = "drop_last") |>
+  mutate(total        = sum(n),
+         prop_fsHC    = ifelse(subgroup == "fs-HCs", n / total, NA_real_)) |>
+  ungroup()
+
+
+max_count <- max(df_bin$total, na.rm = TRUE)
+
+ggplot(df_bin, aes(x = expr_bin, y = n, fill = subgroup)) +
+  geom_col(position = "stack") +
+  scale_fill_manual(values = c("fs-HCs" = "#D95F02",
+                               "non fs-HCs" = "#1B9E77")) +
+  geom_smooth(
+    data = df_bin |> filter(subgroup == "fs-HCs"),
+    aes(y = prop_fsHC * max_count),
+    method = "loess",
+    se     = FALSE,
+    colour = "black",
+    linetype = "dashed",
+    linewidth = 1
+  ) +
+  scale_y_continuous(
+    sec.axis = sec_axis(~ . / max_count,
+                        name = "fs-HCs")
+  )+
+  theme_bw() +
+  theme(
+    plot.title      = element_text(hjust = 0.5),
+    axis.title.y.right = element_text(color = "black")
+  )
+
+#Figure 2K
+
+#Figure 2 
 genes_of_interest <- c("SLC2A2",  "KHK", "ALDOB")
 genes_of_interest <- c( 'ALB','CD24')
 pseudotime <- FetchData(sce, vars = c("pseudotime"))
